@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { PDFDocument } from "pdf-lib";
-import { File as FileIcon, X, Download, Loader2, Settings } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfSinglePreviewCard from "@/components/PdfSinglePreviewCard";
 
 export default function CompressPdfPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressedPdfUrl, setCompressedPdfUrl] = useState<string | null>(null);
-  const [stats, setStats] = useState<{ old: number; new: number } | null>(null);
+  const [stats, setStats] = useState<{ original: number; compressed: number } | null>(null);
 
   const handleFileSelect = (files: FileList) => {
     if (files && files[0]) {
@@ -24,24 +25,24 @@ export default function CompressPdfPage() {
     if (!file) return;
     setIsCompressing(true);
     setCompressedPdfUrl(null);
-    setStats(null);
 
     try {
       const arrayBuffer = await file.arrayBuffer();
       const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
 
+      // Save with object stream compression
       const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
-      
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
+
       setCompressedPdfUrl(url);
       setStats({
-        old: file.size,
-        new: blob.size,
+        original: file.size,
+        compressed: pdfBytes.length,
       });
     } catch (error) {
       console.error("Error compressing PDF:", error);
-      alert("An error occurred while trying to compress the PDF.");
+      alert("An error occurred while compressing the PDF.");
     } finally {
       setIsCompressing(false);
     }
@@ -56,19 +57,23 @@ export default function CompressPdfPage() {
   };
 
   if (compressedPdfUrl && stats) {
+    const savedBytes = Math.max(0, stats.original - stats.compressed);
+    const percentage = stats.original > 0 ? Math.round((savedBytes / stats.original) * 100) : 0;
+
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-              title="PDF has been compressed!"
-              downloadUrl={compressedPdfUrl}
-              downloadFilename="compressed-document.pdf"
-              onStartOver={() => {
-                setFile(null);
-                setCompressedPdfUrl(null);
-                setStats(null);
-              }}
-              colorScheme="yellow"
-            />
+          title="PDF has been compressed!"
+          subtitle={`Your PDF is now ${percentage}% smaller (${formatSize(stats.compressed)} down from ${formatSize(stats.original)})`}
+          downloadUrl={compressedPdfUrl}
+          downloadFilename={`compressed-${file?.name || "document.pdf"}`}
+          onStartOver={() => {
+            setFile(null);
+            setCompressedPdfUrl(null);
+            setStats(null);
+          }}
+          colorScheme="yellow"
+        />
       </div>
     );
   }
@@ -77,7 +82,7 @@ export default function CompressPdfPage() {
     <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold text-white mb-2">Compress PDF</h1>
       <p className="text-white/60 mb-8 text-center max-w-lg">
-        Reduce file size while optimizing for maximal PDF quality.
+        Reduce file size while optimizing for maximal PDF quality. Preview before compressing.
       </p>
 
       {!file && (
@@ -90,50 +95,32 @@ export default function CompressPdfPage() {
       )}
 
       {file && (
-        <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm mb-8 flex flex-col items-center">
-          <div className="flex items-center gap-3 mb-6 p-4 bg-white/5 border border-white/5 rounded-lg w-full justify-between">
-            <div className="flex items-center gap-3">
-              <FileIcon className="w-8 h-8 text-yellow-500" />
-              <div>
-                <span className="block text-lg font-medium text-white/80">
-                  {file.name}
-                </span>
-                <span className="block text-sm text-white/50">
-                  {formatSize(file.size)}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setCompressedPdfUrl(null);
-                setStats(null);
-              }}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
-            >
-              <X className="w-5 h-5 text-white/50" />
-            </button>
-          </div>
+        <div className="w-full flex flex-col items-center">
+          <PdfSinglePreviewCard
+            file={file}
+            onRemove={() => {
+              setFile(null);
+              setCompressedPdfUrl(null);
+              setStats(null);
+            }}
+            colorScheme="amber"
+          />
 
           {!compressedPdfUrl && (
             <button
               onClick={compressPdf}
               disabled={isCompressing}
-              className="w-full max-w-xs py-3 px-6 bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+              className="w-full max-w-xs py-3.5 px-6 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95"
             >
               {isCompressing ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" /> Compressing...
                 </>
               ) : (
-                <>
-                  <Settings className="w-5 h-5" /> Optimize PDF
-                </>
+                "Compress PDF"
               )}
             </button>
           )}
-
-          
         </div>
       )}
     </div>

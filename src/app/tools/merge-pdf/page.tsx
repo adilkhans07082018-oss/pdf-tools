@@ -1,38 +1,51 @@
 "use client";
 
 import { useState } from "react";
-import { PDFDocument } from "pdf-lib";
-import { File as FileIcon, X, Download, Loader2 } from "lucide-react";
+import { PDFDocument, degrees } from "pdf-lib";
+import { Loader2 } from "lucide-react";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfThumbnailGrid from "@/components/PdfThumbnailGrid";
+import type { PdfFileItem } from "@/components/PdfPreviewModal";
 
 export default function MergePdfPage() {
-  const [files, setFiles] = useState<File[]>([]);
+  const [fileItems, setFileItems] = useState<PdfFileItem[]>([]);
   const [isMerging, setIsMerging] = useState(false);
   const [mergedPdfUrl, setMergedPdfUrl] = useState<string | null>(null);
 
   const handleFileSelect = (selectedFiles: FileList) => {
     const validFiles = Array.from(selectedFiles).filter(
-      (file) => file.type === "application/pdf"
+      (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
     );
-    setFiles((prev) => [...prev, ...validFiles]);
-  };
-
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    const newItems: PdfFileItem[] = validFiles.map((file) => ({
+      id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      file,
+      rotation: 0,
+    }));
+    setFileItems((prev) => [...prev, ...newItems]);
   };
 
   const mergePdfs = async () => {
-    if (files.length < 2) return;
+    if (fileItems.length < 2) return;
     setIsMerging(true);
     setMergedPdfUrl(null);
 
     try {
       const mergedPdf = await PDFDocument.create();
 
-      for (const file of files) {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdfDoc = await PDFDocument.load(arrayBuffer);
+      for (const item of fileItems) {
+        const arrayBuffer = await item.file.arrayBuffer();
+        const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+        const pages = pdfDoc.getPages();
+
+        // Apply per-file rotation if user rotated this document
+        if (item.rotation) {
+          for (const page of pages) {
+            const currentRotation = page.getRotation().angle;
+            page.setRotation(degrees(currentRotation + item.rotation));
+          }
+        }
+
         const copiedPages = await mergedPdf.copyPages(
           pdfDoc,
           pdfDoc.getPageIndices()
@@ -56,82 +69,64 @@ export default function MergePdfPage() {
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-            title="PDFs have been merged!"
-            downloadUrl={mergedPdfUrl}
-            downloadFilename="merged-document.pdf"
-            onStartOver={() => {
-              setFiles([]);
-              setMergedPdfUrl(null);
-            }}
-            colorScheme="red"
-          />
+          title="PDFs have been merged!"
+          downloadUrl={mergedPdfUrl}
+          downloadFilename="merged-document.pdf"
+          onStartOver={() => {
+            setFileItems([]);
+            setMergedPdfUrl(null);
+          }}
+          colorScheme="red"
+        />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
-      <h1 className="text-3xl font-bold text-white mb-2">Merge PDF Files</h1>
-      <p className="text-white/60 mb-8 text-center max-w-lg">
-        Combine multiple PDFs into one unified document. Drag and drop your files below.
+    <div className="flex-1 w-full max-w-5xl mx-auto py-12 px-4 flex flex-col items-center">
+      <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 tracking-tight">Merge PDF Files</h1>
+      <p className="text-white/60 mb-8 text-center max-w-lg text-sm sm:text-base">
+        Combine multiple PDFs in the exact order you want. Preview pages, rotate, or reorder before merging.
       </p>
 
-      {/* Upload Area */}
-      <Dropzone
-        onFileSelect={handleFileSelect}
-        multiple={true}
-        colorScheme="blue"
-        title="Select PDF files"
-        subtitle="or drop PDFs here"
-      />
-
-      {/* File List */}
-      {files.length > 0 && (
-        <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm mb-8">
-          <h3 className="font-semibold text-white mb-4">Selected Files</h3>
-          <ul className="space-y-3">
-            {files.map((file, idx) => (
-              <li
-                key={`${file.name}-${idx}`}
-                className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <FileIcon className="w-5 h-5 text-red-500" />
-                  <span className="text-sm font-medium text-white/80">
-                    {file.name}
-                  </span>
-                </div>
-                <button
-                  onClick={() => removeFile(idx)}
-                  className="p-1 hover:bg-white/10 rounded-full transition-colors"
-                >
-                  <X className="w-4 h-4 text-white/50" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {/* Upload Dropzone (shown initially or when list is empty) */}
+      {fileItems.length === 0 ? (
+        <Dropzone
+          onFileSelect={handleFileSelect}
+          multiple={true}
+          colorScheme="red"
+          title="Select PDF files"
+          subtitle="or drop PDFs here"
+        />
+      ) : (
+        /* Large Visual Thumbnail Cards & Grid */
+        <PdfThumbnailGrid
+          items={fileItems}
+          onItemsChange={setFileItems}
+          onAddFiles={handleFileSelect}
+          onClearAll={() => setFileItems([])}
+        />
       )}
 
       {/* Action Buttons */}
       <div className="flex flex-col items-center gap-4 w-full">
-        {files.length > 1 && !mergedPdfUrl && (
+        {fileItems.length > 0 && !mergedPdfUrl && (
           <button
             onClick={mergePdfs}
-            disabled={isMerging}
-            className="w-full max-w-xs py-3 px-6 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+            disabled={isMerging || fileItems.length < 2}
+            className="w-full max-w-xs py-3.5 px-8 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
           >
             {isMerging ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" /> Merging...
+                <Loader2 className="w-5 h-5 animate-spin" /> Merging {fileItems.length} PDFs...
               </>
+            ) : fileItems.length < 2 ? (
+              "Add at least 2 files to merge"
             ) : (
-              "Merge PDFs"
+              `Merge ${fileItems.length} PDFs`
             )}
           </button>
         )}
-
-        
       </div>
     </div>
   );
