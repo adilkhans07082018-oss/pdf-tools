@@ -44,9 +44,19 @@ html.light header nav a:hover {
   color: #0f172a !important;
 }
 
-/* Invert PDFCRAFT Logo to crisp dark charcoal */
-html.light header img {
-  filter: invert(1) brightness(0.2) contrast(1.2);
+/* Logo display for Dark vs Light mode */
+.dark-logo {
+  display: block;
+}
+.light-logo {
+  display: none;
+}
+
+html.light .dark-logo {
+  display: none !important;
+}
+html.light .light-logo {
+  display: block !important;
 }
 
 /* Footer in Light Mode */

@@ -53,7 +53,8 @@ export default function RootLayout({
             {/* Left side: Logo */}
             <div className="flex items-center h-full">
               <Link href="/" className="flex items-center hover:opacity-80 transition-opacity">
-                <img src="/logo.png" alt="PDFCRAFT Logo" className="h-10 w-auto object-contain transition-all duration-200" />
+                <img src="/logo.png" alt="PDFCRAFT Logo" className="h-10 w-auto object-contain dark-logo transition-all duration-200" />
+                <img src="/logo-light.png" alt="PDFCRAFT Logo" className="h-10 w-auto object-contain light-logo transition-all duration-200" />
               </Link>
             </div>
 
