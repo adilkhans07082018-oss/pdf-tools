@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Eye, RotateCw, Trash2, ChevronLeft, ChevronRight, FileText, Loader2 } from "lucide-react";
+import { Eye, RotateCw, Trash2, ChevronLeft, ChevronRight, FileText, Loader2, GripVertical } from "lucide-react";
 import type { PdfFileItem } from "./PdfPreviewModal";
 
 interface PdfThumbnailCardProps {
   item: PdfFileItem;
   index: number;
   total: number;
+  isDragging?: boolean;
+  isDragOver?: boolean;
+  onDragStart?: (e: React.DragEvent, index: number) => void;
+  onDragOver?: (e: React.DragEvent, index: number) => void;
+  onDragEnter?: (e: React.DragEvent, index: number) => void;
+  onDragLeave?: (e: React.DragEvent, index: number) => void;
+  onDrop?: (e: React.DragEvent, index: number) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
   onPreview: (index: number) => void;
   onRotate: (index: number) => void;
   onMoveLeft: (index: number) => void;
@@ -45,6 +53,14 @@ export default function PdfThumbnailCard({
   item,
   index,
   total,
+  isDragging = false,
+  isDragOver = false,
+  onDragStart,
+  onDragOver,
+  onDragEnter,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
   onPreview,
   onRotate,
   onMoveLeft,
@@ -135,11 +151,27 @@ export default function PdfThumbnailCard({
   const rotation = item.rotation || 0;
 
   return (
-    <div className="group relative bg-[#0d0d0d] hover:bg-[#111111] border border-white/10 hover:border-white/25 rounded-2xl p-3 flex flex-col transition-all duration-200 shadow-lg hover:shadow-2xl">
+    <div 
+      draggable={true}
+      onDragStart={(e) => onDragStart?.(e, index)}
+      onDragOver={(e) => onDragOver?.(e, index)}
+      onDragEnter={(e) => onDragEnter?.(e, index)}
+      onDragLeave={(e) => onDragLeave?.(e, index)}
+      onDrop={(e) => onDrop?.(e, index)}
+      onDragEnd={(e) => onDragEnd?.(e)}
+      className={`group relative bg-[#0d0d0d] hover:bg-[#111111] border rounded-2xl p-3 flex flex-col transition-all duration-200 shadow-lg cursor-grab active:cursor-grabbing select-none ${
+        isDragging 
+          ? "opacity-35 scale-95 border-dashed border-red-500 ring-2 ring-red-500/25" 
+          : isDragOver
+          ? "border-red-500 ring-2 ring-red-500 ring-offset-2 ring-offset-[#0a0a0a] scale-[1.03] bg-red-500/[0.04]"
+          : "border-white/10 hover:border-white/25 hover:shadow-2xl"
+      }`}
+    >
       {/* Top Action Bar */}
       <div className="flex items-center justify-between gap-1 mb-2 px-1">
-        {/* Order badge */}
-        <div className="flex items-center gap-1.5">
+        {/* Order badge + Drag Grip */}
+        <div className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing">
+          <GripVertical className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" />
           <span className="w-6 h-6 rounded-full bg-white/10 text-white/90 text-xs font-bold font-mono flex items-center justify-center border border-white/10">
             {index + 1}
           </span>
@@ -151,12 +183,16 @@ export default function PdfThumbnailCard({
         </div>
 
         {/* Reorder and Delete controls */}
-        <div className="flex items-center gap-1">
+        <div 
+          className="flex items-center gap-1"
+          draggable={false}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
             onClick={() => onMoveLeft(index)}
             disabled={index === 0}
             className="p-1 text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:hover:bg-transparent rounded transition-colors"
-            title="Move earlier in merge order"
+            title="Move earlier (or drag card)"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -164,7 +200,7 @@ export default function PdfThumbnailCard({
             onClick={() => onMoveRight(index)}
             disabled={index === total - 1}
             className="p-1 text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:hover:bg-transparent rounded transition-colors"
-            title="Move later in merge order"
+            title="Move later (or drag card)"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -226,7 +262,11 @@ export default function PdfThumbnailCard({
         )}
 
         {/* Hover Action Overlay */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-2 p-3 backdrop-blur-[2px]">
+        <div 
+          className="absolute inset-0 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-2 p-3 backdrop-blur-[2px]"
+          draggable={false}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
             onClick={(e) => {
               e.stopPropagation();

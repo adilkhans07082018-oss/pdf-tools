@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Plus, LayoutGrid, List, ArrowDownAZ, Trash2, FileText, Eye, RotateCw, ChevronUp, ChevronDown, X } from "lucide-react";
+import { Plus, LayoutGrid, List, ArrowDownAZ, Trash2, FileText, Eye, RotateCw, ChevronUp, ChevronDown, X, GripVertical } from "lucide-react";
 import PdfThumbnailCard from "./PdfThumbnailCard";
 import PdfPreviewModal, { type PdfFileItem } from "./PdfPreviewModal";
 
@@ -20,10 +20,13 @@ export default function PdfThumbnailGrid({
 }: PdfThumbnailGridProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isExternalDraggingOver, setIsExternalDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleMove = (fromIndex: number, toIndex: number) => {
-    if (toIndex < 0 || toIndex >= items.length) return;
+    if (toIndex < 0 || toIndex >= items.length || fromIndex === toIndex) return;
     const updated = [...items];
     const [moved] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, moved);
@@ -66,8 +69,82 @@ export default function PdfThumbnailGrid({
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       onAddFiles(e.target.files);
-      // Reset input value so same files can be re-selected if needed
       e.target.value = "";
+    }
+  };
+
+  // Card Drag-and-Drop Handlers
+  const handleCardDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", index.toString());
+  };
+
+  const handleCardDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleCardDragEnter = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleCardDragLeave = (e: React.DragEvent, index: number) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      if (dragOverIndex === index) {
+        setDragOverIndex(null);
+      }
+    }
+  };
+
+  const handleCardDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Internal card reorder
+    if (draggedIndex !== null) {
+      if (draggedIndex !== dropIndex) {
+        handleMove(draggedIndex, dropIndex);
+      }
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    // External file dropped on card
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onAddFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleCardDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Outer container drag-and-drop (for external files)
+  const handleContainerDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedIndex === null && e.dataTransfer.types.includes("Files")) {
+      setIsExternalDraggingOver(true);
+    }
+  };
+
+  const handleContainerDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsExternalDraggingOver(false);
+    }
+  };
+
+  const handleContainerDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsExternalDraggingOver(false);
+    if (draggedIndex === null && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onAddFiles(e.dataTransfer.files);
     }
   };
 
@@ -77,34 +154,13 @@ export default function PdfThumbnailGrid({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDraggingOver(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onAddFiles(e.dataTransfer.files);
-    }
-  };
-
   return (
     <div 
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onDragOver={handleContainerDragOver}
+      onDragLeave={handleContainerDragLeave}
+      onDrop={handleContainerDrop}
       className={`w-full bg-[#0a0a0a] border rounded-2xl p-4 sm:p-6 shadow-xl mb-8 flex flex-col transition-colors duration-200 ${
-        isDraggingOver ? "border-red-500 bg-red-500/[0.03]" : "border-white/10"
+        isExternalDraggingOver ? "border-red-500 bg-red-500/[0.03]" : "border-white/10"
       }`}
     >
       {/* Hidden file input for adding more files */}
@@ -128,8 +184,9 @@ export default function PdfThumbnailGrid({
               {items.length}
             </span>
           </div>
-          <p className="text-xs text-white/50 mt-0.5">
-            Hover cards to preview or rotate. Files merge in order from #1 onwards.
+          <p className="text-xs text-white/60 mt-0.5 flex items-center gap-1.5">
+            <span>✨ Drag cards to adjust merge order.</span>
+            <span className="text-white/40">Files will merge from #1 to #{items.length}.</span>
           </p>
         </div>
 
@@ -190,7 +247,7 @@ export default function PdfThumbnailGrid({
         </div>
       </div>
 
-      {/* Grid View (Large Thumbnails) */}
+      {/* Grid View (Large Thumbnails with Drag Reordering) */}
       {viewMode === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {items.map((item, idx) => (
@@ -199,6 +256,14 @@ export default function PdfThumbnailGrid({
               item={item}
               index={idx}
               total={items.length}
+              isDragging={draggedIndex === idx}
+              isDragOver={dragOverIndex === idx}
+              onDragStart={handleCardDragStart}
+              onDragOver={handleCardDragOver}
+              onDragEnter={handleCardDragEnter}
+              onDragLeave={handleCardDragLeave}
+              onDrop={handleCardDrop}
+              onDragEnd={handleCardDragEnd}
               onPreview={(i) => setPreviewIndex(i)}
               onRotate={(i) => handleRotate(i)}
               onMoveLeft={(i) => handleMove(i, i - 1)}
@@ -227,15 +292,29 @@ export default function PdfThumbnailGrid({
           </div>
         </div>
       ) : (
-        /* List View */
+        /* List View (with Drag Reordering) */
         <div className="space-y-2">
           {items.map((item, idx) => (
             <div
               key={item.id}
-              className="flex items-center justify-between p-3 bg-white/5 hover:bg-white/[0.07] border border-white/5 hover:border-white/15 rounded-xl transition-all gap-3"
+              draggable={true}
+              onDragStart={(e) => handleCardDragStart(e, idx)}
+              onDragOver={(e) => handleCardDragOver(e, idx)}
+              onDragEnter={(e) => handleCardDragEnter(e, idx)}
+              onDragLeave={(e) => handleCardDragLeave(e, idx)}
+              onDrop={(e) => handleCardDrop(e, idx)}
+              onDragEnd={handleCardDragEnd}
+              className={`flex items-center justify-between p-3 rounded-xl transition-all gap-3 cursor-grab active:cursor-grabbing select-none border ${
+                draggedIndex === idx
+                  ? "opacity-35 scale-[0.98] border-dashed border-red-500 bg-red-500/10"
+                  : dragOverIndex === idx
+                  ? "border-red-500 ring-2 ring-red-500 scale-[1.01] bg-red-500/[0.06]"
+                  : "bg-white/5 hover:bg-white/[0.07] border-white/5 hover:border-white/15"
+              }`}
             >
-              {/* Left: Index + Icon + Name */}
-              <div className="flex items-center gap-3 min-w-0">
+              {/* Left: Grip + Index + Icon + Name */}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <GripVertical className="w-4 h-4 text-white/30 hover:text-white/60 flex-shrink-0 cursor-grab active:cursor-grabbing" />
                 <span className="w-6 h-6 rounded-full bg-white/10 text-white/80 text-xs font-mono font-bold flex items-center justify-center flex-shrink-0">
                   {idx + 1}
                 </span>
@@ -269,7 +348,11 @@ export default function PdfThumbnailGrid({
               </div>
 
               {/* Right: Controls */}
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div 
+                className="flex items-center gap-1.5 flex-shrink-0"
+                draggable={false}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
                 <button
                   onClick={() => setPreviewIndex(idx)}
                   className="p-1.5 bg-white/5 hover:bg-white/15 text-white/70 hover:text-white rounded-lg transition-colors"
