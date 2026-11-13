@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { PDFDocument } from "pdf-lib";
-import { File as FileIcon, X, Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfSinglePreviewCard from "@/components/PdfSinglePreviewCard";
 
 export default function RemovePagesPdfPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -27,13 +28,22 @@ export default function RemovePagesPdfPage() {
 
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
       const totalCount = pdfDoc.getPageCount();
 
-      // parse "1, 3, 5" or "1-3" etc. simplistic comma parsing
-      const pagesToRemove = pagesToRemoveStr.split(',').map(s => parseInt(s.trim()) - 1).filter(n => !isNaN(n) && n >= 0 && n < totalCount);
+      // Parse comma-separated or range e.g. "1, 3, 5"
+      const pagesToRemove = pagesToRemoveStr
+        .split(',')
+        .map(s => parseInt(s.trim()) - 1)
+        .filter(n => !isNaN(n) && n >= 0 && n < totalCount);
       
-      // Remove in reverse order so indices don't shift for upcoming removals
+      if (pagesToRemove.length === 0) {
+        alert("Please specify valid page numbers to remove.");
+        setIsProcessing(false);
+        return;
+      }
+
+      // Remove in descending order so indices don't shift
       pagesToRemove.sort((a, b) => b - a);
       
       for (const pIndex of pagesToRemove) {
@@ -46,7 +56,7 @@ export default function RemovePagesPdfPage() {
       setResultUrl(url);
     } catch (error) {
       console.error("Error processing PDF:", error);
-      alert("An error occurred. Check your page numbers.");
+      alert("An error occurred while removing pages. Check your page numbers.");
     } finally {
       setIsProcessing(false);
     }
@@ -56,12 +66,12 @@ export default function RemovePagesPdfPage() {
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-              title="Pages removed!"
-              downloadUrl={resultUrl}
-              downloadFilename={`cleaned-${file.name}`}
-              onStartOver={() => { setFile(null); setResultUrl(null); }}
-              colorScheme="red"
-            />
+          title="Pages removed!"
+          downloadUrl={resultUrl}
+          downloadFilename={`cleaned-${file?.name || "document.pdf"}`}
+          onStartOver={() => { setFile(null); setResultUrl(null); }}
+          colorScheme="red"
+        />
       </div>
     );
   }
@@ -70,46 +80,49 @@ export default function RemovePagesPdfPage() {
     <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold text-white mb-2">Remove Pages</h1>
       <p className="text-white/60 mb-8 text-center max-w-lg">
-        Delete specific pages from a PDF document.
+        Delete specific pages from a PDF document with full page preview.
       </p>
 
       {!file && (
-        <Dropzone onFileSelect={handleFileSelect} colorScheme="red" title="Select PDF file" />
+        <Dropzone onFileSelect={handleFileSelect} colorScheme="red" title="Select PDF file" subtitle="or drop PDF here" />
       )}
 
       {file && (
-        <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm mb-8 flex flex-col items-center">
-          <div className="flex items-center gap-3 mb-6 p-4 bg-white/5 border border-white/5 rounded-lg w-full justify-between">
-            <div className="flex items-center gap-3">
-              <FileIcon className="w-8 h-8 text-red-500" />
-              <span className="text-lg font-medium text-white/80">{file.name}</span>
-            </div>
-            <button onClick={() => { setFile(null); setResultUrl(null); }} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-              <X className="w-5 h-5 text-white/50" />
-            </button>
-          </div>
+        <div className="w-full flex flex-col items-center">
+          <PdfSinglePreviewCard
+            file={file}
+            onRemove={() => { setFile(null); setResultUrl(null); }}
+            colorScheme="red"
+          />
 
           {!resultUrl && (
             <div className="flex flex-col items-center gap-4 w-full max-w-xs">
-              <input 
-                type="text"
-                value={pagesToRemoveStr} 
-                onChange={(e) => setPagesToRemoveStr(e.target.value)}
-                placeholder="Pages to remove (e.g. 1, 3, 5)"
-                className="w-full p-3 border border-white/20 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-              />
-              
+              <div className="w-full">
+                <label className="block text-xs font-medium text-white/70 mb-1.5">
+                  Pages to Remove (e.g. 1, 3, 5)
+                </label>
+                <input 
+                  type="text"
+                  placeholder="Enter page numbers (e.g. 1, 4)"
+                  value={pagesToRemoveStr}
+                  onChange={(e) => setPagesToRemoveStr(e.target.value)}
+                  className="w-full p-3.5 bg-[#0d0d0d] text-white border border-white/20 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                />
+              </div>
+
               <button
                 onClick={processPdf}
-                disabled={isProcessing || !pagesToRemoveStr}
-                className="w-full py-3 px-6 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                disabled={isProcessing || !pagesToRemoveStr.trim()}
+                className="w-full py-3.5 px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
               >
-                {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /> Removing...</> : <><Trash2 className="w-5 h-5" /> Remove Pages</>}
+                {isProcessing ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Removing pages...</>
+                ) : (
+                  <><Trash2 className="w-5 h-5" /> Delete Pages</>
+                )}
               </button>
             </div>
           )}
-
-          
         </div>
       )}
     </div>

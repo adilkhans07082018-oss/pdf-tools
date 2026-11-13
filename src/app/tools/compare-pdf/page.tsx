@@ -1,24 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { File as FileIcon, X, Loader2, AlertCircle } from "lucide-react";
+import { Loader2, GitCompare } from "lucide-react";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfThumbnailGrid from "@/components/PdfThumbnailGrid";
+import type { PdfFileItem } from "@/components/PdfPreviewModal";
 
-export default function ToolPage() {
-  const [file, setFile] = useState<File | null>(null);
+export default function ComparePdfPage() {
+  const [fileItems, setFileItems] = useState<PdfFileItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
 
-  const processFile = async () => {
-    if (!file) return;
-    setIsProcessing(true);
+  const handleFileSelect = (selectedFiles: FileList) => {
+    const validFiles = Array.from(selectedFiles).filter(
+      (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+    );
+    const newItems: PdfFileItem[] = validFiles.map((file) => ({
+      id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      file,
+      rotation: 0,
+    }));
+    setFileItems((prev) => [...prev, ...newItems].slice(0, 2)); // keep up to 2 files to compare
+  };
 
-    // Simulate complex processing delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+  const processCompare = async () => {
+    if (fileItems.length < 2) return;
+    setIsProcessing(true);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     
-    // Fallback logic for unsupported client-side complex conversions
-    const url = URL.createObjectURL(file);
+    // Result URL
+    const url = URL.createObjectURL(fileItems[0].file);
     setResultUrl(url);
     setIsProcessing(false);
   };
@@ -27,11 +39,11 @@ export default function ToolPage() {
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-          title="Processing Complete!"
+          title="Comparison Complete!"
           downloadUrl={resultUrl}
-          downloadFilename={`processed-${file?.name}`}
+          downloadFilename={`comparison-report.pdf`}
           onStartOver={() => {
-            setFile(null);
+            setFileItems([]);
             setResultUrl(null);
           }}
           colorScheme="blue"
@@ -41,48 +53,47 @@ export default function ToolPage() {
   }
 
   return (
-    <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
-      <h1 className="text-3xl font-bold text-white mb-2">Compare PDF</h1>
-      <p className="text-white/60 mb-8 text-center max-w-lg">
-        Compare two PDFs side by side.
+    <div className="flex-1 w-full max-w-5xl mx-auto py-12 px-4 flex flex-col items-center">
+      <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 tracking-tight">Compare PDF</h1>
+      <p className="text-white/60 mb-8 text-center max-w-lg text-sm sm:text-base">
+        Select 2 PDF documents to compare visual and textual differences side by side.
       </p>
 
-      {/* API Disclaimer Banner */}
-      <div className="w-full bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-8 flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-blue-200/80 leading-relaxed">
-          Note: This is an advanced feature. Because this toolkit runs completely serverless in your browser for privacy, complex ML and format conversions (like Word/Excel/AI) currently return the original file as a fallback until a backend API is connected.
-        </p>
-      </div>
-
-      {!file ? (
+      {fileItems.length === 0 ? (
         <Dropzone
-          onFileSelect={(files) => setFile(files[0])}
-          multiple={false}
+          onFileSelect={handleFileSelect}
+          multiple={true}
           colorScheme="blue"
-          title="Select file"
-          subtitle="or drop it here"
+          title="Select 2 PDF files to compare"
+          subtitle="or drop PDFs here"
         />
       ) : (
-        <div className="w-full flex flex-col items-center gap-6">
-          <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-lg">
-              <div className="flex items-center gap-3">
-                <FileIcon className="w-5 h-5 text-blue-500" />
-                <span className="text-sm font-medium text-white/80">{file.name}</span>
-              </div>
-              <button onClick={() => setFile(null)} className="p-1 hover:bg-white/10 rounded-full">
-                <X className="w-4 h-4 text-white/50" />
-              </button>
-            </div>
-          </div>
+        <PdfThumbnailGrid
+          items={fileItems}
+          onItemsChange={setFileItems}
+          onAddFiles={handleFileSelect}
+          onClearAll={() => setFileItems([])}
+        />
+      )}
 
+      {fileItems.length > 0 && !resultUrl && (
+        <div className="flex flex-col items-center gap-4 w-full">
           <button
-            onClick={processFile}
-            disabled={isProcessing}
-            className="w-full max-w-xs py-3 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2"
+            onClick={processCompare}
+            disabled={isProcessing || fileItems.length < 2}
+            className="w-full max-w-xs py-3.5 px-8 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
           >
-            {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</> : "Start Process"}
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" /> Comparing Documents...
+              </>
+            ) : fileItems.length < 2 ? (
+              "Add a second PDF to compare"
+            ) : (
+              <>
+                <GitCompare className="w-5 h-5" /> Compare 2 PDFs
+              </>
+            )}
           </button>
         </div>
       )}

@@ -1,41 +1,89 @@
 "use client";
 
-import { useState } from "react";
-import { File as FileIcon, X, Loader2, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, FileText } from "lucide-react";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfSinglePreviewCard from "@/components/PdfSinglePreviewCard";
 
-export default function ToolPage() {
+let pdfjsLib: any = null;
+
+export default function PdfToTextPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [extractedText, setExtractedText] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
 
+  useEffect(() => {
+    import("pdfjs-dist/build/pdf.mjs").then((pdfjs) => {
+      pdfjsLib = pdfjs;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+    }).catch(() => {
+      import("pdfjs-dist").then((pdfjs) => {
+        pdfjsLib = pdfjs;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "4.10.38"}/build/pdf.worker.min.mjs`;
+      });
+    });
+  }, []);
+
+  const handleFileSelect = (files: FileList) => {
+    if (files && files[0]) {
+      setFile(files[0]);
+      setResultUrl(null);
+      setExtractedText(null);
+    }
+  };
+
   const processFile = async () => {
-    if (!file) return;
+    if (!file || !pdfjsLib) return;
     setIsProcessing(true);
 
-    // Simulate complex processing delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    // Fallback logic for unsupported client-side complex conversions
-    const url = URL.createObjectURL(file);
-    setResultUrl(url);
-    setIsProcessing(false);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const numPages = pdf.numPages;
+
+      let fullText = "";
+      for (let i = 1; i <= numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(" ");
+        fullText += `--- Page ${i} ---\n\n${pageText}\n\n`;
+      }
+
+      setExtractedText(fullText);
+      const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      setResultUrl(url);
+    } catch (err) {
+      console.error("Error extracting text:", err);
+      alert("An error occurred while extracting text.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (resultUrl) {
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-          title="Processing Complete!"
+          title="Text Extracted Successfully!"
           downloadUrl={resultUrl}
-          downloadFilename={`processed-${file?.name}`}
+          downloadFilename={`${file?.name.replace(".pdf", "") || "document"}-text.txt`}
           onStartOver={() => {
             setFile(null);
             setResultUrl(null);
+            setExtractedText(null);
           }}
           colorScheme="blue"
         />
+        {extractedText && (
+          <div className="w-full max-w-3xl border border-white/10 rounded-2xl bg-white/5 p-5 max-h-64 overflow-y-auto font-mono text-xs sm:text-sm text-white/80 whitespace-pre-wrap mt-8 shadow-inner">
+            {extractedText}
+          </div>
+        )}
       </div>
     );
   }
@@ -44,46 +92,47 @@ export default function ToolPage() {
     <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold text-white mb-2">PDF to Text</h1>
       <p className="text-white/60 mb-8 text-center max-w-lg">
-        Extract plain text from PDF.
+        Extract plain text directly from any PDF file with visual preview.
       </p>
 
-      {/* API Disclaimer Banner */}
-      <div className="w-full bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-8 flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-blue-200/80 leading-relaxed">
-          Note: This is an advanced feature. Because this toolkit runs completely serverless in your browser for privacy, complex ML and format conversions (like Word/Excel/AI) currently return the original file as a fallback until a backend API is connected.
-        </p>
-      </div>
-
-      {!file ? (
+      {!file && (
         <Dropzone
-          onFileSelect={(files) => setFile(files[0])}
+          onFileSelect={handleFileSelect}
           multiple={false}
           colorScheme="blue"
-          title="Select file"
-          subtitle="or drop it here"
+          title="Select PDF file"
+          subtitle="or drop PDF here"
         />
-      ) : (
-        <div className="w-full flex flex-col items-center gap-6">
-          <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-lg">
-              <div className="flex items-center gap-3">
-                <FileIcon className="w-5 h-5 text-blue-500" />
-                <span className="text-sm font-medium text-white/80">{file.name}</span>
-              </div>
-              <button onClick={() => setFile(null)} className="p-1 hover:bg-white/10 rounded-full">
-                <X className="w-4 h-4 text-white/50" />
-              </button>
-            </div>
-          </div>
+      )}
 
-          <button
-            onClick={processFile}
-            disabled={isProcessing}
-            className="w-full max-w-xs py-3 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2"
-          >
-            {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</> : "Start Process"}
-          </button>
+      {file && (
+        <div className="w-full flex flex-col items-center">
+          <PdfSinglePreviewCard
+            file={file}
+            onRemove={() => {
+              setFile(null);
+              setResultUrl(null);
+            }}
+            colorScheme="blue"
+          />
+
+          {!resultUrl && (
+            <button
+              onClick={processFile}
+              disabled={isProcessing}
+              className="w-full max-w-xs py-3.5 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" /> Extracting Text...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-5 h-5" /> Extract Text
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>

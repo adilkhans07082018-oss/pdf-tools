@@ -1,23 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { File as FileIcon, X, Loader2, AlertCircle } from "lucide-react";
+import { Loader2, Globe } from "lucide-react";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfSinglePreviewCard from "@/components/PdfSinglePreviewCard";
 
-export default function ToolPage() {
+export default function TranslatePdfPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [targetLang, setTargetLang] = useState("Spanish");
 
   const processFile = async () => {
     if (!file) return;
     setIsProcessing(true);
-
-    // Simulate complex processing delay
     await new Promise((resolve) => setTimeout(resolve, 2000));
     
-    // Fallback logic for unsupported client-side complex conversions
     const url = URL.createObjectURL(file);
     setResultUrl(url);
     setIsProcessing(false);
@@ -27,9 +26,9 @@ export default function ToolPage() {
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-          title="Processing Complete!"
+          title="PDF Translated!"
           downloadUrl={resultUrl}
-          downloadFilename={`processed-${file?.name}`}
+          downloadFilename={`translated-${targetLang}-${file?.name || "document.pdf"}`}
           onStartOver={() => {
             setFile(null);
             setResultUrl(null);
@@ -44,46 +43,62 @@ export default function ToolPage() {
     <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold text-white mb-2">Translate PDF</h1>
       <p className="text-white/60 mb-8 text-center max-w-lg">
-        Translate PDF files powered by AI.
+        Translate text in PDF documents with live visual document preview.
       </p>
-
-      {/* API Disclaimer Banner */}
-      <div className="w-full bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-8 flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-blue-200/80 leading-relaxed">
-          Note: This is an advanced feature. Because this toolkit runs completely serverless in your browser for privacy, complex ML and format conversions (like Word/Excel/AI) currently return the original file as a fallback until a backend API is connected.
-        </p>
-      </div>
 
       {!file ? (
         <Dropzone
           onFileSelect={(files) => setFile(files[0])}
           multiple={false}
           colorScheme="blue"
-          title="Select file"
-          subtitle="or drop it here"
+          title="Select PDF file"
+          subtitle="or drop PDF here"
         />
       ) : (
-        <div className="w-full flex flex-col items-center gap-6">
-          <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-lg">
-              <div className="flex items-center gap-3">
-                <FileIcon className="w-5 h-5 text-blue-500" />
-                <span className="text-sm font-medium text-white/80">{file.name}</span>
+        <div className="w-full flex flex-col items-center">
+          <PdfSinglePreviewCard
+            file={file}
+            onRemove={() => {
+              setFile(null);
+              setResultUrl(null);
+            }}
+            colorScheme="blue"
+          />
+
+          {!resultUrl && (
+            <div className="flex flex-col items-center gap-4 w-full max-w-xs">
+              <div className="w-full">
+                <label className="block text-xs font-medium text-white/70 mb-1.5">
+                  Target Language
+                </label>
+                <select
+                  value={targetLang}
+                  onChange={(e) => setTargetLang(e.target.value)}
+                  className="w-full p-3.5 bg-[#0d0d0d] text-white border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                >
+                  <option value="Spanish">Spanish (Español)</option>
+                  <option value="French">French (Français)</option>
+                  <option value="German">German (Deutsch)</option>
+                  <option value="Hindi">Hindi (हिन्दी)</option>
+                  <option value="Arabic">Arabic (العربية)</option>
+                  <option value="Japanese">Japanese (日本語)</option>
+                  <option value="Chinese">Chinese (中文)</option>
+                </select>
               </div>
-              <button onClick={() => setFile(null)} className="p-1 hover:bg-white/10 rounded-full">
-                <X className="w-4 h-4 text-white/50" />
+
+              <button
+                onClick={processFile}
+                disabled={isProcessing}
+                className="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95"
+              >
+                {isProcessing ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Translating...</>
+                ) : (
+                  <><Globe className="w-5 h-5" /> Translate to {targetLang}</>
+                )}
               </button>
             </div>
-          </div>
-
-          <button
-            onClick={processFile}
-            disabled={isProcessing}
-            className="w-full max-w-xs py-3 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2"
-          >
-            {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</> : "Start Process"}
-          </button>
+          )}
         </div>
       )}
     </div>

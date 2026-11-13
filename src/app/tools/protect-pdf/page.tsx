@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { PDFDocument } from "pdf-lib";
-import { File as FileIcon, X, Download, Loader2, Lock } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfSinglePreviewCard from "@/components/PdfSinglePreviewCard";
 
 export default function ProtectPdfPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -26,7 +27,7 @@ export default function ProtectPdfPage() {
 
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
 
       const encryptedBytes = await pdfDoc.save({
         userPassword: password,
@@ -47,7 +48,7 @@ export default function ProtectPdfPage() {
       setProtectedPdfUrl(url);
     } catch (error) {
       console.error("Error protecting PDF:", error);
-      alert("An error occurred. Note: pdf-lib might have limited encryption support out-of-the-box in the browser.");
+      alert("An error occurred while protecting the PDF.");
     } finally {
       setIsProtecting(false);
     }
@@ -57,16 +58,16 @@ export default function ProtectPdfPage() {
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-            title="PDF has been protected!"
-            downloadUrl={protectedPdfUrl}
-            downloadFilename="protected-document.pdf"
-            onStartOver={() => {
-              setFile(null);
-              setProtectedPdfUrl(null);
-              setPassword("");
-            }}
-            colorScheme="red"
-          />
+          title="PDF has been protected!"
+          downloadUrl={protectedPdfUrl}
+          downloadFilename={`protected-${file?.name || "document.pdf"}`}
+          onStartOver={() => {
+            setFile(null);
+            setProtectedPdfUrl(null);
+            setPassword("");
+          }}
+          colorScheme="red"
+        />
       </div>
     );
   }
@@ -75,7 +76,7 @@ export default function ProtectPdfPage() {
     <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold text-white mb-2">Protect PDF</h1>
       <p className="text-white/60 mb-8 text-center max-w-lg">
-        Encrypt your PDF with a password to keep sensitive data confidential.
+        Encrypt your PDF with a password to keep sensitive data confidential. Preview before encrypting.
       </p>
 
       {!file && (
@@ -88,61 +89,43 @@ export default function ProtectPdfPage() {
       )}
 
       {file && (
-        <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm mb-8 flex flex-col items-center">
-          <div className="flex items-center gap-3 mb-6 p-4 bg-white/5 border border-white/5 rounded-lg w-full justify-between">
-            <div className="flex items-center gap-3">
-              <FileIcon className="w-8 h-8 text-red-500" />
-              <span className="text-lg font-medium text-white/80">
-                {file.name}
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setProtectedPdfUrl(null);
-                setPassword("");
-              }}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
-            >
-              <X className="w-5 h-5 text-white/50" />
-            </button>
-          </div>
+        <div className="w-full flex flex-col items-center">
+          <PdfSinglePreviewCard
+            file={file}
+            onRemove={() => {
+              setFile(null);
+              setProtectedPdfUrl(null);
+              setPassword("");
+            }}
+            colorScheme="red"
+          />
 
           {!protectedPdfUrl && (
-            <div className="w-full max-w-sm flex flex-col gap-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-1">
-                  Set Password
-                </label>
-                <div className="relative">
-                  <Lock className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter strong password"
-                    className="w-full pl-10 pr-4 py-2 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
-              </div>
-
+            <div className="flex flex-col items-center gap-4 w-full max-w-xs">
+              <input
+                type="password"
+                placeholder="Enter password to encrypt"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full p-3.5 bg-[#0d0d0d] text-white border border-white/20 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm placeholder:text-white/40"
+              />
               <button
                 onClick={protectPdf}
                 disabled={isProtecting || !password}
-                className="w-full py-3 px-6 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                className="w-full py-3.5 px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
               >
                 {isProtecting ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" /> Encrypting...
+                    <Loader2 className="w-5 h-5 animate-spin" /> Protecting...
                   </>
                 ) : (
-                  "Protect PDF"
+                  <>
+                    <Lock className="w-5 h-5" /> Protect PDF
+                  </>
                 )}
               </button>
             </div>
           )}
-
-        
         </div>
       )}
     </div>

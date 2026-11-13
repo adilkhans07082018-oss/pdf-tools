@@ -1,37 +1,78 @@
 "use client";
 
 import { useState } from "react";
-import { File as FileIcon, X, Loader2, AlertCircle } from "lucide-react";
+import { PDFDocument, degrees } from "pdf-lib";
+import { Loader2 } from "lucide-react";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfThumbnailGrid from "@/components/PdfThumbnailGrid";
+import type { PdfFileItem } from "@/components/PdfPreviewModal";
 
-export default function ToolPage() {
-  const [file, setFile] = useState<File | null>(null);
+export default function OrganizePdfPage() {
+  const [fileItems, setFileItems] = useState<PdfFileItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
 
-  const processFile = async () => {
-    if (!file) return;
-    setIsProcessing(true);
+  const handleFileSelect = (selectedFiles: FileList) => {
+    const validFiles = Array.from(selectedFiles).filter(
+      (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+    );
+    const newItems: PdfFileItem[] = validFiles.map((file) => ({
+      id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      file,
+      rotation: 0,
+    }));
+    setFileItems((prev) => [...prev, ...newItems]);
+  };
 
-    // Simulate complex processing delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    // Fallback logic for unsupported client-side complex conversions
-    const url = URL.createObjectURL(file);
-    setResultUrl(url);
-    setIsProcessing(false);
+  const processPdfs = async () => {
+    if (fileItems.length === 0) return;
+    setIsProcessing(true);
+    setResultUrl(null);
+
+    try {
+      const mergedPdf = await PDFDocument.create();
+
+      for (const item of fileItems) {
+        const arrayBuffer = await item.file.arrayBuffer();
+        const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+        const pages = pdfDoc.getPages();
+
+        if (item.rotation) {
+          for (const page of pages) {
+            const currentRotation = page.getRotation().angle;
+            page.setRotation(degrees(currentRotation + item.rotation));
+          }
+        }
+
+        const copiedPages = await mergedPdf.copyPages(
+          pdfDoc,
+          pdfDoc.getPageIndices()
+        );
+        copiedPages.forEach((page) => mergedPdf.addPage(page));
+      }
+
+      const pdfBytes = await mergedPdf.save();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      setResultUrl(url);
+    } catch (error) {
+      console.error("Error organizing PDFs:", error);
+      alert("An error occurred while saving organized PDFs.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (resultUrl) {
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-          title="Processing Complete!"
+          title="PDF Organized & Saved!"
           downloadUrl={resultUrl}
-          downloadFilename={`processed-${file?.name}`}
+          downloadFilename="organized-document.pdf"
           onStartOver={() => {
-            setFile(null);
+            setFileItems([]);
             setResultUrl(null);
           }}
           colorScheme="blue"
@@ -41,48 +82,43 @@ export default function ToolPage() {
   }
 
   return (
-    <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
-      <h1 className="text-3xl font-bold text-white mb-2">Organize PDF</h1>
-      <p className="text-white/60 mb-8 text-center max-w-lg">
-        Sort, add, or delete PDF pages.
+    <div className="flex-1 w-full max-w-5xl mx-auto py-12 px-4 flex flex-col items-center">
+      <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 tracking-tight">Organize PDF</h1>
+      <p className="text-white/60 mb-8 text-center max-w-lg text-sm sm:text-base">
+        Sort, reorder, rotate, or delete PDF pages with visual drag-and-drop preview cards.
       </p>
 
-      {/* API Disclaimer Banner */}
-      <div className="w-full bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-8 flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-blue-200/80 leading-relaxed">
-          Note: This is an advanced feature. Because this toolkit runs completely serverless in your browser for privacy, complex ML and format conversions (like Word/Excel/AI) currently return the original file as a fallback until a backend API is connected.
-        </p>
-      </div>
-
-      {!file ? (
+      {fileItems.length === 0 ? (
         <Dropzone
-          onFileSelect={(files) => setFile(files[0])}
-          multiple={false}
+          onFileSelect={handleFileSelect}
+          multiple={true}
           colorScheme="blue"
-          title="Select file"
-          subtitle="or drop it here"
+          title="Select PDF files"
+          subtitle="or drop PDFs here"
         />
       ) : (
-        <div className="w-full flex flex-col items-center gap-6">
-          <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-lg">
-              <div className="flex items-center gap-3">
-                <FileIcon className="w-5 h-5 text-blue-500" />
-                <span className="text-sm font-medium text-white/80">{file.name}</span>
-              </div>
-              <button onClick={() => setFile(null)} className="p-1 hover:bg-white/10 rounded-full">
-                <X className="w-4 h-4 text-white/50" />
-              </button>
-            </div>
-          </div>
+        <PdfThumbnailGrid
+          items={fileItems}
+          onItemsChange={setFileItems}
+          onAddFiles={handleFileSelect}
+          onClearAll={() => setFileItems([])}
+        />
+      )}
 
+      {fileItems.length > 0 && !resultUrl && (
+        <div className="flex flex-col items-center gap-4 w-full">
           <button
-            onClick={processFile}
+            onClick={processPdfs}
             disabled={isProcessing}
-            className="w-full max-w-xs py-3 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2"
+            className="w-full max-w-xs py-3.5 px-8 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
           >
-            {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</> : "Start Process"}
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" /> Saving Organized PDF...
+              </>
+            ) : (
+              `Save Organized PDF (${fileItems.length} files)`
+            )}
           </button>
         </div>
       )}

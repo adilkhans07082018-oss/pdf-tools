@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { File as FileIcon, X, Download, Loader2, Image as ImageIcon } from "lucide-react";
+import { Loader2, Image as ImageIcon } from "lucide-react";
 import JSZip from "jszip";
 import Dropzone from "@/components/Dropzone";
 import SuccessScreen from "@/components/SuccessScreen";
+import PdfSinglePreviewCard from "@/components/PdfSinglePreviewCard";
 
 let pdfjsLib: any = null;
 
@@ -16,11 +17,11 @@ export default function PdfToJpgPage() {
   useEffect(() => {
     import("pdfjs-dist/build/pdf.mjs").then((pdfjs) => {
       pdfjsLib = pdfjs;
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
-    }).catch(err => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+    }).catch(() => {
       import("pdfjs-dist").then((pdfjs) => {
         pdfjsLib = pdfjs;
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "4.10.38"}/build/pdf.worker.min.mjs`;
       });
     });
   }, []);
@@ -54,7 +55,7 @@ export default function PdfToJpgPage() {
 
         if (ctx) {
           await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
           const base64Data = dataUrl.split(",")[1];
           zip.file(`page_${i}.jpg`, base64Data, { base64: true });
         }
@@ -75,15 +76,15 @@ export default function PdfToJpgPage() {
     return (
       <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[600px]">
         <SuccessScreen
-              title="PDF converted to JPGs!"
-              downloadUrl={zipUrl}
-              downloadFilename={`${file.name.replace(".pdf", "")}-images.zip`}
-              onStartOver={() => {
-                setFile(null);
-                setZipUrl(null);
-              }}
-              colorScheme="purple"
-            />
+          title="PDF converted to JPGs!"
+          downloadUrl={zipUrl}
+          downloadFilename={`${file?.name.replace(".pdf", "") || "document"}-images.zip`}
+          onStartOver={() => {
+            setFile(null);
+            setZipUrl(null);
+          }}
+          colorScheme="purple"
+        />
       </div>
     );
   }
@@ -92,7 +93,7 @@ export default function PdfToJpgPage() {
     <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold text-white mb-2">PDF to JPG</h1>
       <p className="text-white/60 mb-8 text-center max-w-lg">
-        Convert each PDF page into a high-quality JPG image.
+        Convert each PDF page into a high-quality JPG image with preview.
       </p>
 
       {!file && (
@@ -105,34 +106,25 @@ export default function PdfToJpgPage() {
       )}
 
       {file && (
-        <div className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-sm mb-8 flex flex-col items-center">
-          <div className="flex items-center gap-3 mb-6 p-4 bg-white/5 border border-white/5 rounded-lg w-full justify-between">
-            <div className="flex items-center gap-3">
-              <FileIcon className="w-8 h-8 text-purple-500" />
-              <span className="text-lg font-medium text-white/80">
-                {file.name}
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setZipUrl(null);
-              }}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
-            >
-              <X className="w-5 h-5 text-white/50" />
-            </button>
-          </div>
+        <div className="w-full flex flex-col items-center">
+          <PdfSinglePreviewCard
+            file={file}
+            onRemove={() => {
+              setFile(null);
+              setZipUrl(null);
+            }}
+            colorScheme="purple"
+          />
 
           {!zipUrl && (
             <button
               onClick={convertPdfToJpg}
               disabled={isConverting}
-              className="w-full max-w-xs py-3 px-6 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+              className="w-full max-w-xs py-3.5 px-6 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95"
             >
               {isConverting ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" /> Converting...
+                  <Loader2 className="w-5 h-5 animate-spin" /> Converting pages...
                 </>
               ) : (
                 <>
@@ -141,8 +133,6 @@ export default function PdfToJpgPage() {
               )}
             </button>
           )}
-
-          
         </div>
       )}
     </div>
