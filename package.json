@@ -24,6 +24,7 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.9.4",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
